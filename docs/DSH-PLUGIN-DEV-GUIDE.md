@@ -753,6 +753,11 @@ dsh plugin --profile web add file:D:/path/to/dsh-aurora   # link: 前缀 = 符�
 - 成品参考插件 `dsh-one-click-launcher`：<https://github.com/wenliang9527/dsh-one-click-launcher>
 - 骨架插件 `dsh-eye`：<https://github.com/wenliang9527/dsh-eye>
 
+**社区参考项目（安装方式实测）**
+- dsh-visualize（bundle 类插件 + tsdown 构建 host/client）:<https://github.com/Nagi-ovo/dsh-visualize>
+- dsh-find-plugins（skill 分发 + 安装方式权威矩阵）:<https://github.com/Nagi-ovo/dsh-find-plugins>（`skills/find-plugins/references/install-methods.md`）
+- 社区 plugin-registry（设置 → 插件 安装源）:<https://github.com/dsh-external/plugin-registry>
+
 **本地源码（权威契约，按需精读）**
 - `node_modules/@deepseek-ai/dsh-tool-cordis/README.zh.md` —— cordis 五动词、插槽目录生成机制、信任立场
 - `node_modules/@deepseek-ai/dsh-cordis-client-runner/lib/client.js` —— Client 闭包、ctx 门面、`guardedTheme`/`guardedSlots`、每槽示例
