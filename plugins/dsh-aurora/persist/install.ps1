@@ -32,12 +32,15 @@ foreach ($target in @($loaderTarget, $profileTarget)) {
 $patch = Join-Path $profileDir 'cordis.patch.yml'
 $text = [System.IO.File]::ReadAllText($patch)
 
-# remove the legacy relative-path entry block, if present
-$oldPattern = '(?m)^\s*- insert:\r?\n\s+- id: dsh-aurora\r?\n\s+name: [^\r\n]+\r?\n?'
-if ($text -match $oldPattern) {
-  $text = [regex]::Replace($text, $oldPattern, '')
-  Write-Host 'removed legacy relative-path entry'
-}
+# remove EVERY existing dsh-aurora entry block (legacy relative-path or
+# package-name form) together with its banner comment header, so re-runs
+# never accumulate duplicate headers
+do {
+  $before = $text
+  $text = [regex]::Replace($text, '(?m)^# =+\r?\n# dsh-aurora[^\r\n]*\r?\n(?:# [^\r\n]*\r?\n)*# =+\r?\n?', '')
+  $text = [regex]::Replace($text, '(?m)^[ \t]*- insert:\r?\n[ \t]*- id: dsh-aurora\r?\n[ \t]*name: [^\r\n]+\r?\n?', '')
+} while ($text -ne $before)
+Write-Host 'cleaned previous dsh-aurora blocks'
 
 if ($text -notmatch 'id: dsh-aurora') {
   $nl = "`r`n"

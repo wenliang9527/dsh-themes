@@ -15,16 +15,17 @@
 //    保证各套内部的层次/对比关系一致
 // ============================================================
 
-// ---------- 颜色工具 ----------
-function hexToRgb(h) {
-  const n = parseInt(h.slice(1), 16)
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+// ---------- 颜色工具:原生 CSS color-mix,免 JS 混色 ----------
+// cm(base, amount, target) = target 按 amount% 叠加到 base 上(≈旧 mix(base,target,t))
+function cm(base, amount, target) {
+  return 'color-mix(in oklch, ' + target + ' ' + amount + '%, ' + base + ')'
 }
-function rgb(c) { return 'rgb(' + c[0] + ', ' + c[1] + ', ' + c[2] + ')' }
-function mix(a, b, t) { return [Math.round(a[0] + (b[0] - a[0]) * t), Math.round(a[1] + (b[1] - a[1]) * t), Math.round(a[2] + (b[2] - a[2]) * t)] }
-function alpha(c, a) { return 'rgba(' + c[0] + ', ' + c[1] + ', ' + c[2] + ', ' + a + ')' }
-const WHITE = [255, 255, 255]
-const BLACK = [0, 0, 0]
+// cmAlpha(color, amount) = color 按 amount% 叠在透明上(≈旧 rgba 透明度)
+function cmAlpha(color, amount) {
+  return 'color-mix(in srgb, ' + color + ' ' + amount + '%, transparent)'
+}
+const WHITE = '#ffffff'
+const BLACK = '#000000'
 
 // ---------- 8 套主题色板(每套 12 个核心参数 × 浅/深) ----------
 // 语义色(错误/成功/警告)8 套共用,保证语义不混淆
@@ -86,122 +87,140 @@ const THEME_DEFS = {
 // ---------- Token 生成器:12 个核心参数 → 80 个语义 token ----------
 function buildTokens(scheme, p) {
   const dark = scheme === 'dark'
-  const b = hexToRgb(p.base), l1 = hexToRgb(p.l1), l2 = hexToRgb(p.l2), l3 = hexToRgb(p.l3)
-  const brand = hexToRgb(p.brand), brand2 = hexToRgb(p.brand2)
-  const t1 = hexToRgb(p.text1), t2 = hexToRgb(p.text2), t3 = hexToRgb(p.text3), t4 = hexToRgb(p.text4)
-  const bubble = hexToRgb(p.bubble), bubbleHl = hexToRgb(p.bubbleHl)
-  const sidebar = hexToRgb(p.sidebar), navA = hexToRgb(p.navA), navHl = hexToRgb(p.navHl)
-  const err = hexToRgb(SEMANTIC.error[scheme]), err2 = hexToRgb(SEMANTIC.error2[scheme])
-  const ok = hexToRgb(SEMANTIC.success[scheme]), ok2 = hexToRgb(SEMANTIC.success2[scheme]), ok3 = hexToRgb(SEMANTIC.success3[scheme])
-  const wa = hexToRgb(SEMANTIC.warn[scheme]), wa2 = hexToRgb(SEMANTIC.warn2[scheme]), wa3 = hexToRgb(SEMANTIC.warn3[scheme]), waL = hexToRgb(SEMANTIC.warnLabel[scheme])
-  const fg = dark ? mix(t1, BLACK, 0.8) : WHITE            // 品牌/深底上的前景文字
-  const brandText = dark ? mix(brand, WHITE, 0.7) : brand2 // 品牌文字
-  const borderBase = dark ? WHITE : t1                      // 边框/交互用色基
-  const interactive = dark ? WHITE : brand                  // 交互反馈色
+  const fg = dark ? cm(p.text1, 80, BLACK) : WHITE            // 品牌/深底上的前景文字
+  const brandText = dark ? cm(p.brand, 70, WHITE) : p.brand2  // 品牌文字
+  const borderBase = dark ? WHITE : p.text1                   // 边框/交互用色基
+  const interactive = dark ? WHITE : p.brand                  // 交互反馈色
 
   return {
     // 表面层级
-    '--dsw-alias-bg-base': rgb(b),
-    '--dsw-alias-bg-layer-1': rgb(l1),
-    '--dsw-alias-bg-layer-2': rgb(l2),
-    '--dsw-alias-bg-layer-3': rgb(l3),
-    '--dsw-alias-bg-overlay': dark ? rgb(mix(l3, WHITE, 0.05)) : rgb(l1),
-    '--dsw-alias-bg-module-platform': dark ? rgb(mix(l3, l2, 0.5)) : rgb(mix(b, l1, 0.4)),
-    '--dsw-alias-bg-multi-select': rgb(mix(l2, l3, 0.5)),
-    '--dsw-alias-bg-skeleton': alpha(borderBase, dark ? 0.08 : 0.05),
+    '--dsw-alias-bg-base': p.base,
+    '--dsw-alias-bg-layer-1': p.l1,
+    '--dsw-alias-bg-layer-2': p.l2,
+    '--dsw-alias-bg-layer-3': p.l3,
+    '--dsw-alias-bg-overlay': dark ? cm(p.l3, 5, WHITE) : p.l1,
+    '--dsw-alias-bg-module-platform': dark ? cm(p.l3, 50, p.l2) : cm(p.base, 40, p.l1),
+    '--dsw-alias-bg-multi-select': cm(p.l2, 50, p.l3),
+    '--dsw-alias-bg-skeleton': cmAlpha(borderBase, dark ? 8 : 5),
     // 边框
-    '--dsw-alias-border-l1': alpha(borderBase, 0.06),
-    '--dsw-alias-border-l2': alpha(borderBase, 0.12),
-    '--dsw-alias-border-l2-darkmode-thin': alpha(borderBase, dark ? 0.07 : 0.1),
-    '--dsw-alias-border-l3': alpha(borderBase, 0.15),
-    '--dsw-alias-border-l4': alpha(borderBase, 0.2),
-    '--dsw-alias-border-inverted': dark ? alpha(brand, 0.35) : alpha(brand, 0),
-    '--dsw-alias-border-inverted2': dark ? alpha(brand, 0.45) : alpha(brand, 0),
+    '--dsw-alias-border-l1': cmAlpha(borderBase, 6),
+    '--dsw-alias-border-l2': cmAlpha(borderBase, 12),
+    '--dsw-alias-border-l2-darkmode-thin': cmAlpha(borderBase, dark ? 7 : 10),
+    '--dsw-alias-border-l3': cmAlpha(borderBase, 15),
+    '--dsw-alias-border-l4': cmAlpha(borderBase, 20),
+    '--dsw-alias-border-inverted': dark ? cmAlpha(p.brand, 35) : cmAlpha(p.brand, 0),
+    '--dsw-alias-border-inverted2': dark ? cmAlpha(p.brand, 45) : cmAlpha(p.brand, 0),
     // 品牌与按钮
-    '--dsw-alias-brand-primary': rgb(brand),
-    '--dsw-alias-brand-text': rgb(brandText),
-    '--dsw-alias-brand-primary-invert': dark ? rgb(brandText) : rgb(WHITE),
-    '--dsw-alias-brand-primary-new-colorprimary-new-color': dark ? rgb(brand) : rgb(mix(brand, WHITE, 0.2)),
-    '--dsw-alias-button-primary-fill': rgb(brand),
-    '--dsw-alias-button-primary-hover': dark ? rgb(brandText) : rgb(brand2),
-    '--dsw-alias-button-primary-dimmed': rgb(mix(brand, b, 0.85)),
-    '--dsw-alias-button-info-fill': dark ? rgb(brand) : rgb(mix(brand, WHITE, 0.2)),
-    '--dsw-alias-button-info-hover': dark ? rgb(brand2) : rgb(brand),
-    '--dsw-alias-button-contrast-fill': dark ? rgb(mix(t1, WHITE, 0.15)) : rgb(mix(t1, BLACK, 0.2)),
-    '--dsw-alias-button-elevated-fill': rgb(l1),
-    '--dsw-alias-button-floating-fill': rgb(l1),
-    '--dsw-alias-button-floating-hover': rgb(mix(l2, l3, 0.5)),
-    '--dsw-alias-button-ghost-active-border': dark ? rgb(mix(brand, WHITE, 0.3)) : rgb(mix(brand, t1, 0.6)),
-    '--dsw-alias-button-ghost-active-fill': rgb(mix(b, brand, 0.04)),
-    '--dsw-alias-button-ghost-active-hover': rgb(mix(b, brand, 0.07)),
+    '--dsw-alias-brand-primary': p.brand,
+    '--dsw-alias-brand-text': brandText,
+    '--dsw-alias-brand-primary-invert': dark ? brandText : WHITE,
+    '--dsw-alias-brand-primary-new-colorprimary-new-color': dark ? p.brand : cm(p.brand, 20, WHITE),
+    '--dsw-alias-button-primary-fill': p.brand,
+    '--dsw-alias-button-primary-hover': dark ? brandText : p.brand2,
+    '--dsw-alias-button-primary-dimmed': cm(p.brand, 85, p.base),
+    '--dsw-alias-button-info-fill': dark ? p.brand : cm(p.brand, 20, WHITE),
+    '--dsw-alias-button-info-hover': dark ? p.brand2 : p.brand,
+    '--dsw-alias-button-contrast-fill': dark ? cm(p.text1, 15, WHITE) : cm(p.text1, 20, BLACK),
+    '--dsw-alias-button-elevated-fill': p.l1,
+    '--dsw-alias-button-floating-fill': p.l1,
+    '--dsw-alias-button-floating-hover': cm(p.l2, 50, p.l3),
+    '--dsw-alias-button-ghost-active-border': dark ? cm(p.brand, 30, WHITE) : cm(p.brand, 60, p.text1),
+    '--dsw-alias-button-ghost-active-fill': cm(p.base, 4, p.brand),
+    '--dsw-alias-button-ghost-active-hover': cm(p.base, 7, p.brand),
     // 交互反馈
-    '--dsw-alias-interactive-bg-hover': alpha(interactive, dark ? 0.08 : 0.06),
-    '--dsw-alias-interactive-bg-active': alpha(interactive, dark ? 0.14 : 0.1),
-    '--dsw-alias-interactive-bg-hover-solid': rgb(mix(b, brand, 0.03)),
-    '--dsw-alias-interactive-bg-hover-accent': alpha(brand, dark ? 0.22 : 0.12),
-    '--dsw-alias-interactive-bg-hover-danger': alpha(err, dark ? 0.15 : 0.05),
+    '--dsw-alias-interactive-bg-hover': cmAlpha(interactive, dark ? 8 : 6),
+    '--dsw-alias-interactive-bg-active': cmAlpha(interactive, dark ? 14 : 10),
+    '--dsw-alias-interactive-bg-hover-solid': cm(p.base, 3, p.brand),
+    '--dsw-alias-interactive-bg-hover-accent': cmAlpha(p.brand, dark ? 22 : 12),
+    '--dsw-alias-interactive-bg-hover-danger': cmAlpha(SEMANTIC.error[scheme], dark ? 15 : 5),
     // 文字
-    '--dsw-alias-label-primary': rgb(t1),
-    '--dsw-alias-label-secondary': rgb(t2),
-    '--dsw-alias-label-tertiary': rgb(t3),
-    '--dsw-alias-label-caption': rgb(t4),
-    '--dsw-alias-label-dimmed': rgb(mix(t1, b, 0.78)),
-    '--dsw-alias-label-primary-foreground': rgb(fg),
-    '--dsw-alias-label-primary-inverted': rgb(fg),
-    '--dsw-alias-label-primary-dimmed': rgb(t1),
-    '--dsw-alias-label-primary-bluish': dark ? rgb(t1) : rgb(brand2),
+    '--dsw-alias-label-primary': p.text1,
+    '--dsw-alias-label-secondary': p.text2,
+    '--dsw-alias-label-tertiary': p.text3,
+    '--dsw-alias-label-caption': p.text4,
+    '--dsw-alias-label-dimmed': cm(p.text1, 78, p.base),
+    '--dsw-alias-label-primary-foreground': fg,
+    '--dsw-alias-label-primary-inverted': fg,
+    '--dsw-alias-label-primary-dimmed': p.text1,
+    '--dsw-alias-label-primary-bluish': dark ? p.text1 : p.brand2,
     // 状态色(8 套共用语义)
-    '--dsw-alias-state-error-primary': rgb(err),
-    '--dsw-alias-state-error-secondary': rgb(err2),
-    '--dsw-alias-state-success-primary': rgb(ok),
-    '--dsw-alias-state-success-secondary': rgb(ok2),
-    '--dsw-alias-state-success-tertiary': rgb(ok3),
-    '--dsw-alias-state-warn-label': rgb(waL),
-    '--dsw-alias-state-warn-primary': rgb(wa),
-    '--dsw-alias-state-warn-secondary': rgb(wa2),
-    '--dsw-alias-state-warn-tertiary': rgb(wa3),
-    '--dsw-alias-state-business-primary': rgb(brand),
-    '--dsw-alias-state-business-tertiary': rgb(mix(brand, b, 0.9)),
+    '--dsw-alias-state-error-primary': SEMANTIC.error[scheme],
+    '--dsw-alias-state-error-secondary': SEMANTIC.error2[scheme],
+    '--dsw-alias-state-success-primary': SEMANTIC.success[scheme],
+    '--dsw-alias-state-success-secondary': SEMANTIC.success2[scheme],
+    '--dsw-alias-state-success-tertiary': SEMANTIC.success3[scheme],
+    '--dsw-alias-state-warn-label': SEMANTIC.warnLabel[scheme],
+    '--dsw-alias-state-warn-primary': SEMANTIC.warn[scheme],
+    '--dsw-alias-state-warn-secondary': SEMANTIC.warn2[scheme],
+    '--dsw-alias-state-warn-tertiary': SEMANTIC.warn3[scheme],
+    '--dsw-alias-state-business-primary': p.brand,
+    '--dsw-alias-state-business-tertiary': cm(p.brand, 90, p.base),
     // Markdown / 代码
-    '--dsw-alias-markdown-code-block': rgb(mix(b, t1, dark ? 0.03 : 0.04)),
-    '--dsw-alias-markdown-code-block-banner': rgb(mix(b, t1, dark ? 0.06 : 0.05)),
-    '--dsw-alias-markdown-inline-code': rgb(mix(l1, brand, dark ? 0.08 : 0.06)),
-    '--dsw-alias-markdown-citation': rgb(mix(b, brand, 0.03)),
-    '--dsw-alias-markdown-tag': rgb(mix(b, brand, 0.03)),
-    '--dsw-alias-markdown-placeholder': rgb(mix(b, t1, 0.02)),
-    '--dsw-alias-markdown-code-segment-selected': rgb(l1),
-    '--dsw-alias-markdown-code-segment-unselected': rgb(mix(b, t1, dark ? 0.03 : 0.04)),
+    '--dsw-alias-markdown-code-block': cm(p.base, dark ? 3 : 4, p.text1),
+    '--dsw-alias-markdown-code-block-banner': cm(p.base, dark ? 6 : 5, p.text1),
+    '--dsw-alias-markdown-inline-code': cm(p.l1, dark ? 8 : 6, p.brand),
+    '--dsw-alias-markdown-citation': cm(p.base, 3, p.brand),
+    '--dsw-alias-markdown-tag': cm(p.base, 3, p.brand),
+    '--dsw-alias-markdown-placeholder': cm(p.base, 2, p.text1),
+    '--dsw-alias-markdown-code-segment-selected': p.l1,
+    '--dsw-alias-markdown-code-segment-unselected': cm(p.base, dark ? 3 : 4, p.text1),
     // 滚动条
-    '--dsw-alias-scrollbar-bg-l1': rgb(mix(t1, b, 0.85)),
-    '--dsw-alias-scrollbar-bg-l2': rgb(mix(t1, b, 0.78)),
-    '--dsw-alias-scrollbar-hover-l1': rgb(mix(t1, b, 0.72)),
-    '--dsw-alias-scrollbar-hover-l2': rgb(mix(t1, b, 0.65)),
+    '--dsw-alias-scrollbar-bg-l1': cm(p.text1, 85, p.base),
+    '--dsw-alias-scrollbar-bg-l2': cm(p.text1, 78, p.base),
+    '--dsw-alias-scrollbar-hover-l1': cm(p.text1, 72, p.base),
+    '--dsw-alias-scrollbar-hover-l2': cm(p.text1, 65, p.base),
     // Toast / Tooltip
-    '--dsw-alias-toast-bg': dark ? rgb(mix(l3, t1, 0.15)) : rgb(mix(t1, BLACK, 0.15)),
-    '--dsw-alias-tooltip-bg': dark ? rgb(mix(l3, t1, 0.15)) : rgb(mix(t1, BLACK, 0.15)),
+    '--dsw-alias-toast-bg': dark ? cm(p.l3, 15, p.text1) : cm(p.text1, 15, BLACK),
+    '--dsw-alias-tooltip-bg': dark ? cm(p.l3, 15, p.text1) : cm(p.text1, 15, BLACK),
     // 领域专用
-    '--dsw-specific-bubble': rgb(bubble),
-    '--dsw-specific-bubble-highlight': rgb(bubbleHl),
-    '--dsw-specific-sidebar-fill': rgb(sidebar),
-    '--dsw-specific-sidebar-nav-item-active': rgb(navA),
-    '--dsw-specific-sidebar-nav-item-active-accent': rgb(mix(brand, navA, 0.3)),
-    '--dsw-specific-sidebar-nav-item-hover': rgb(navHl),
-    '--dsw-specific-input-major': rgb(l1),
-    '--dsw-specific-login-input': rgb(mix(b, l1, 0.5)),
-    '--dsw-specific-selector': rgb(mix(l2, l3, 0.5)),
-    '--dsw-specific-tip': rgb(mix(b, brand, 0.02)),
+    '--dsw-specific-bubble': p.bubble,
+    '--dsw-specific-bubble-highlight': p.bubbleHl,
+    '--dsw-specific-sidebar-fill': p.sidebar,
+    '--dsw-specific-sidebar-nav-item-active': p.navA,
+    '--dsw-specific-sidebar-nav-item-active-accent': cm(p.brand, 30, p.navA),
+    '--dsw-specific-sidebar-nav-item-hover': p.navHl,
+    '--dsw-specific-input-major': p.l1,
+    '--dsw-specific-login-input': cm(p.base, 50, p.l1),
+    '--dsw-specific-selector': cm(p.l2, 50, p.l3),
+    '--dsw-specific-tip': cm(p.base, 2, p.brand),
   }
 }
 
-// 组装 8 套主题:{ id, name, chip, tokens: { light, dark } }
+// overrideTokens 要求扁平表:每个 token 一个 { light, dark } 值对(不是按明暗分两张表)
+function buildPairMap(lightDef, darkDef) {
+  const lt = buildTokens('light', lightDef)
+  const dk = buildTokens('dark', darkDef)
+  const out = {}
+  for (const k of Object.keys(lt)) out[k] = { light: lt[k], dark: dk[k] }
+  return out
+}
+
+// 组装 8 套主题:{ id, name, chip, tokens: { token: { light, dark } } }
 const THEMES = {}
 for (const [id, def] of Object.entries(THEME_DEFS)) {
   THEMES[id] = {
     id,
     name: def.name,
     chip: def.chip,
-    tokens: { light: buildTokens('light', def.light), dark: buildTokens('dark', def.dark) },
+    tokens: buildPairMap(def.light, def.dark),
   }
+}
+
+// ---------- 偏好持久化:localStorage(带版本 key + 校验回退) ----------
+// 第三方插件没有 Host 设置命名空间,社区标准做法是浏览器存储:
+// key 带版本号,读回时校验(未知 id 回退默认),坏数据/隐私模式静默降级。
+const STORAGE_KEY = 'dsh-aurora/settings/v1'
+function loadSavedTheme() {
+  try {
+    const raw = globalThis.localStorage && globalThis.localStorage.getItem(STORAGE_KEY)
+    if (raw && THEMES[raw]) return raw
+  } catch (e) { /* 隐私模式等场景忽略 */ }
+  return 'aurora'
+}
+function saveTheme(id) {
+  try {
+    if (globalThis.localStorage) globalThis.localStorage.setItem(STORAGE_KEY, id)
+  } catch (e) { /* 写失败不阻断切换 */ }
 }
 
 return {
@@ -210,16 +229,17 @@ return {
     const theme = ctx.get('theme')
     if (theme === undefined) return
 
-    // —— 激活即应用默认主题(卸载/停用自动还原) ——
-    let current = 'aurora'
+    // —— 激活即应用主题(上次选择或默认;卸载/停用自动还原) ——
+    let current = loadSavedTheme()
     let disposeLayer = theme.overrideTokens('aurora', THEMES[current].tokens)
 
-    // 切换主题:移除旧调色层 → 叠加新层(同源重叠 = 替换整个层)
+    // 切换主题:移除旧调色层 → 叠加新层(同源重叠 = 替换整个层) → 记入本地存储
     const setTheme = (id) => {
       if (id === current || !THEMES[id]) return
       if (disposeLayer !== null) { disposeLayer(); disposeLayer = null }
       disposeLayer = theme.overrideTokens('aurora', THEMES[id].tokens)
       current = id
+      saveTheme(id)
     }
 
     // —— 设置 → 通用 →「主题」选择行(8 色块) ——

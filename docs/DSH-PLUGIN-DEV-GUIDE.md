@@ -533,6 +533,7 @@ return {
 - 内置偏好（light/dark/system）存于 Host 设置 `ui-theme.preference`（默认落盘 `$DSH_HOME/settings.yaml`）；Appearance 行的选择经 Host settings API 写入，跨浏览器同步。
 - Host 在 index 响应里注入引导脚本：插件树激活前就把 `color-scheme` 和 `body[data-ds-dark-theme]` 设好，避免首帧闪烁。
 - 第三方主题 id **不跨内置 schema**：只是进程内扩展；卸载时绝不会覆盖最后持久化的内置偏好。
+- **第三方插件自己的偏好没有 Host 设置命名空间可用**（rc.6 仍如此）。社区标准做法是带版本号的 localStorage key + 逐字段校验回退（见 8.3 案例三）：`apply` 时读出、改动即写、坏数据回退默认——跨重启/跨刷新保留，但只对当前浏览器与 origin 生效。
 
 ---
 
@@ -562,6 +563,7 @@ cordis_inspect what:"temporary"         # 动态包清单
 |---|---|---|
 | `dynamic tool registration must use a tool returned by harness.defineTool` | registerTool 收到非 defineTool 返回值 | 直接传 `defineTool(...)` 的结果 |
 | `theme override "…" is a bare string` | overrideTokens 传了单值 | 改成 `{ light, dark }` 对 |
+| `theme override "light" from "<src>" must map to a { light, dark } pair` | overrideTokens 传了**按明暗分层的嵌套表**（`{ light: {…}, dark: {…} }`，这是 `theme.register` 的形态）或裸字符串 | 传**扁平表**：`{ token: { light, dark } }`，用 `buildPairMap()` 把两套单色 token 拉链成值对（dsh-aurora 8 主题版踩过；verify 脚本的假 overrideTokens 必须按真实契约校验，否则拦不住） |
 | `client half returned undefined — did you forget return?` | 函数体没 `return` 插件 | 补 `return { apply(ctx){…} }` |
 | `dynamic ctx does not expose "xxx"` | 用了未声明的服务属性 | `ctx.get('xxx')` 或加 `inject: ['xxx']` |
 | `network belongs to the HOST half`（fetch 陷阱） | Client 半区用 fetch | 改 `harness.handle` + `host.call` |
@@ -575,6 +577,7 @@ cordis_inspect what:"temporary"         # 动态包清单
 | `COMPONENTNOTFOUND 0x88982F50` | WinRT OCR/WIC 解码不了格式（WebP 等）或字节被污染 | 先 sharp 统一转 PNG(≤2048px);确认字节没被沙箱桥污染(见下) |
 | `w is not a function`（Client 渲染） | root 作用域插槽里调用 `useSessions` 钩子 | 用 `ctx.get('sessions').list.getSnapshot().current` 读当前会话 |
 | `DUPLICATE_ADAPTER` | 永久插件与动态插件同时注册同一个 llm provider | 装了永久版就别再装会话级同名插件;或让永久版独占 |
+| `model-unavailable: ... this session already contains images` | 会话历史里有图片,却要切到不支持图片的纯文本模型 | 这是**设计保护**:含图片历史的会话只能留在支持图片的模型上。开新会话(无图片历史)即可自由切换;图片测试会话与正常文本会话分开用 |
 
 ---
 
@@ -703,6 +706,40 @@ dsh plugin --profile web add file:D:/path/to/dsh-aurora   # link: 前缀 = 符�
 
 > 依赖纪律：profile 目录外的包依赖（如 `@deepseek-ai/dsh-tools`）**解析不到**——放进去前先确认包零外部依赖,或把依赖也放进同一 `node_modules` 闭包（`require('…')` 会从包目录向上找）。eye 的永久版就是用"纯 JSON-schema 形式工具 + 零 require"做到的。
 
+### 8.3 案例三：oil-oil/dsh-theme —— 主题类插件的完整范式（含偏好持久化）
+
+社区主题插件 `oil-oil/dsh-theme`（2026-08 实测，已对本地 rc.6 包逐项验证）是"主题 = 完整设置页"的标杆实现，与本工作区 `dsh-aurora` 的"设置行 + 会话记忆"路线互补。关键结论：
+
+**① 持久化：第三方偏好只能落浏览器（localStorage）**，这是它对"重启即重置"这一题的标准答案：
+- DSH 目前**不向第三方开放设置命名空间**（`SettingsScope` 是内置特性独占的：`ui-theme.preference`、locale 等）；第三方插件的偏好没法写 Host schema。
+- 它的做法：带版本号 key `dsh-theme/settings/v1`，每次改动 `setItem`，`apply` 时 `getItem` + `decodeThemeStudioSettings()`（逐字段校验 HEX 格式、枚举值，坏数据回退默认值；还带旧版字段迁移——旧 schema 没有 InlineCode 字段，从 Foreground/Background 按比例混色推导）。**纯客户端、跨重启/跨刷新，但只对当前浏览器与 origin 生效**（README 如实标注了这个边界）。
+- 服务端设置存在时是另一个选项：经 RPC 写 `$DSH_HOME/settings.yaml` 会污染内置 schema，官方未支持；localStorage 是社区唯一稳妥路径。
+
+**② UI 形态：整页 `settings.section` vs 单行 `settings.general.item`**（rc.6 官方类型注释确认二者分工）：
+- `settings.section` = "每列表项一个完整设置页"：注册项带 `id`（section key）、`order`（导航位置）、`label`（注册方本地化的导航文案）、`store`、`locale`、`inject`；owner props 只有 `close: () => void`。
+- `settings.general.item` = "General 页里的一行偏好"：owner props 为空，行内自绘（label/当前值/写路径全由自己 inject face + `host.call` 提供）。
+- 主题这类"有几十个控件"的插件用 `settings.section` 更合适；只有一个开关/选择器才用 item 行。
+
+**③ store 范式：`defineStore`（官方 SDK）**：
+- `@deepseek-ai/dsh-client-runtime/client` 导出 `defineStore({ init, persist?, actions })` → `StoreHandle`；actions 是 **immer-draft 变换表**（`(draft, ...params) => void`），框架把 draft 绑定掉，组件只拿到 `BakedActions`。
+- 注册时 `store` 选项传 handle（或传工厂）；框架为每个 entry×scope 建实例，注入组件的 props 是 `PropsStore` = `{ useStore: SnapshotSelectorHook, actions }`；`inject` 工厂的第一参收到 **BoundActions**（`BoundActions<ReturnType<typeof createThemeStudioStore>>`），组件侧在 `useStore((s) => s.xxx)` 里选读。
+- `persist?: string` 是框架级机械持久化 key（作用域实例按 sessionId 后缀隔离、销毁时 `clearPersisted`），但**它是框架内部存储、非浏览器存储**——跨重启持久化仍走自定义 localStorage（见①）。
+
+**④ locale 国际化（rc.6 官方 `dsh-client-locale`）**：
+- `ctx.locale.register(NS, { zh, en })` 一次性注册双语文案（字典必须双语齐全，缺 key 编译报错）；`declare module '@deepseek-ai/dsh-client-ui-slots'` 的 `LocaleNamespaceMap` 合并 NS 得到 `t()` 的类型键。
+- 注册项 `locale: NS` + 组件 props 里收 `t`；导航 label 用 `ctx.locale.bind(NS)('nav')`（bound 函数跨调用稳定，可安全放 inject 面）。
+- 事件 `locale/change`（切换语言才发；字典注册只 bump revision，不触发事件）。
+
+**⑤ 生命周期与事件**：`ctx.effect(fn, label)` 挂副作用（返回清理函数）；`ctx.on('theme/change', (snapshot) => …)` 订阅主题变化，snapshot 含 `preference`、`active.colorScheme`、`themes`、`revision`；`ctx.theme.getTheme()` 同步读当前快照。`overrideTokens` 返回 disposer，effect 清理时释放（`releaseOverride()` 模式，先释放旧的再换新层）。
+
+**⑥ 派生色：直接用原生 `color-mix(in oklch, …)` 而不是 JS 混色**——token 值是 CSS 字符串，浏览器算；`--dsw-alias-bg-layer-2: color-mix(in oklch, <fg> 5%, <surface>)` 一行替代整个 hex 工具链。**静态 token 也能覆盖**：它把 `--dsw-static-deepseek-500/200` 也写进 overrideTokens（注释说明 TurnStatus 组件直接吃静态 DeepSeek 色阶、不走语义别名，这是它集中的例外）。
+
+**⑦ 排版控制**：`--dsw-font-*` + `--ds-font-family-code` 整族覆盖；小技巧是字号缩放进 `font` 简写并内嵌 `var(--dsw-font-family)` 引用，保证族/号联动。
+
+**⑧ 预设与构建纪律**：9 个预设 = 完整 12 色字段对象（presets.ts），`themePresetIdOf()` 按全字段相等反查当前预设 id（自定义时返回 undefined）；TS 源码 + tsdown 构建 → `lib/client.js`（`__ModuleLoader__.load` 格式）与 `lib/index.js`（host 空 `apply`，纯占位让 bundle 可发现）；CI 的 `validate-build.mjs` 卡 bundle 体积预算（240KB）+ 扫禁止依赖残留。安装命令 `npx @deepseek-ai/dsh plugin --profile web add github:oil-oil/dsh-theme`（无全局 launcher 时 `npx @deepseek-ai/dsh` 可行）。
+
+**对照小结（dsh-aurora 已移植项）**：① ✅ 选择持久化改 localStorage（key `dsh-aurora/settings/v1` 带版本号 + 校验回退，激活不写盘、切换才写，重激活恢复上次选择）；③ ✅ 派生色换 `color-mix()` 删掉 hex 工具链（`cm`/`cmAlpha` 两个 helper，verify8 增加"值必须是 hex 或 color-mix"校验防回归）；② ⏳ 未迁 `settings.section` 整页——8 预设用 `settings.general.item` 色块行点击即切，对"快速换肤"是更好的交互，整页留给"可自由调色"型插件；④/⑤ 未做——状态只有一个 `current` 字符串，`defineStore` 与双语 locale 对当前规模是过度设计，需要时再引。
+
 ---
 
 ## 9. 最佳实践与踩坑清单
@@ -756,6 +793,7 @@ dsh plugin --profile web add file:D:/path/to/dsh-aurora   # link: 前缀 = 符�
 **社区参考项目（安装方式实测）**
 - dsh-visualize（bundle 类插件 + tsdown 构建 host/client）:<https://github.com/Nagi-ovo/dsh-visualize>
 - dsh-find-plugins（skill 分发 + 安装方式权威矩阵）:<https://github.com/Nagi-ovo/dsh-find-plugins>（`skills/find-plugins/references/install-methods.md`）
+- dsh-theme（主题类插件完整范式：`settings.section` 整页 + `defineStore` + localStorage 偏好持久化 + `color-mix` 派生色）:<https://github.com/oil-oil/dsh-theme>
 - 社区 plugin-registry（设置 → 插件 安装源）:<https://github.com/dsh-external/plugin-registry>
 
 **本地源码（权威契约，按需精读）**
@@ -765,6 +803,10 @@ dsh plugin --profile web add file:D:/path/to/dsh-aurora   # link: 前缀 = 符�
 - `node_modules/@deepseek-ai/dsh-client-ui-theme/lib/types/client/index.d.ts` —— ThemeRuntime / ThemeDefinition / ThemeTokenOverrides
 - `node_modules/@deepseek-ai/dsh-client-ui-layout/lib/types/client/theme-presenter.d.ts` —— 快照 → DOM 渲染管线
 - `node_modules/@deepseek-ai/dsh-client-ui-slots/lib/types/index.d.ts` —— 插槽注册 API
+- `node_modules/@deepseek-ai/dsh-client-ui-slots/lib/types/store.d.ts` —— defineStore/StoreHandle/BoundActions/PropsStore 契约
+- `node_modules/@deepseek-ai/dsh-client-runtime/lib/types/client/contract/store.d.ts` —— defineStore 实现侧
+- `node_modules/@deepseek-ai/dsh-client-locale/lib/types/client/index.d.ts` —— locale.register/bind 国际化 API
+- `node_modules/@deepseek-ai/dsh-client-ui-settings/lib/types/client/contract/slots.d.ts` —— 设置域全部槽位类型（settings.section / settings.general.item 分工）
 - 本工作区 `DEV-NOTES.md` —— eye 插件开发上下文固化笔记（踩坑总结）
 
 **相关文章（Harness 生态介绍）**

@@ -27,16 +27,27 @@ function evalBundle(src) {
 }
 
 // --- simulate theme + slots services and exercise the plugin ---
+// The fake overrideTokens mirrors the REAL rc.6 contract: tokens is a FLAT map
+// token -> { light, dark } (both strings). A bare string or per-scheme nested
+// map is exactly the runtime error we must catch here.
 function makeCtx(record) {
   const theme = {
     overrideTokens: (src, tokens) => {
-      const light = Object.keys(tokens.light || {})
-      const dark = Object.keys(tokens.dark || {})
-      record.layers.push({ src, count: light.length, darkCount: dark.length })
-      for (const mode of ['light', 'dark']) {
-        for (const [k, v] of Object.entries(tokens[mode])) {
-          if (typeof v !== 'string') throw new Error('bad value for ' + mode + '.' + k)
-          if (!OFFICIAL.has(k)) throw new Error('non-official token: ' + k)
+      const keys = Object.keys(tokens)
+      record.layers.push({ src, count: keys.length })
+      for (const [k, v] of Object.entries(tokens)) {
+        if (typeof v !== 'object' || v === null) {
+          throw new Error('BARE VALUE for ' + k + ' (must be { light, dark } pair): ' + JSON.stringify(v))
+        }
+        if (typeof v.light !== 'string' || typeof v.dark !== 'string') {
+          throw new Error('BAD PAIR for ' + k + ': ' + JSON.stringify(v))
+        }
+        if (!OFFICIAL.has(k)) throw new Error('non-official token: ' + k)
+        // every value must be a literal hex color or a native color-mix()
+        // expression — leftover JS rgb()/rgba() output is a build regression
+        const okColor = (s) => /^#[\da-f]{6}$/i.test(s) || s.indexOf('color-mix(') === 0
+        if (!okColor(v.light) || !okColor(v.dark)) {
+          throw new Error('UNEXPECTED COLOR for ' + k + ': ' + JSON.stringify(v))
         }
       }
       return () => { record.disposed.push(src) }
@@ -51,27 +62,37 @@ function makeCtx(record) {
   return { ctx, getReg: () => reg }
 }
 
+// --- fake browser storage for the persistence test (globalThis.localStorage) ---
+const storageMap = new Map()
+globalThis.localStorage = {
+  getItem: (k) => (storageMap.has(k) ? storageMap.get(k) : null),
+  setItem: (k, v) => { storageMap.set(k, String(v)) },
+}
+const STORAGE_KEY = 'dsh-aurora/settings/v1'
+
 // --- run both halves ---
 for (const [label, src, isBundle] of [
   ['dynamic', readFileSync(ROOT + '/client.js', 'utf8'), false],
   ['persist', readFileSync(ROOT + '/persist/client.js', 'utf8'), true],
 ]) {
+  storageMap.clear()
   const record = { layers: [], disposed: [], slotDisposed: false }
   const plugin = isBundle ? evalBundle(src).plugin : await evalDynamic(src)
   if (!plugin || typeof plugin.apply !== 'function') throw new Error(label + ': not a plugin')
   const { ctx, getReg } = makeCtx(record)
   const cleanup = plugin.apply(ctx)
 
-  // 1) activation applied exactly one layer with 80 tokens per mode
-  if (record.layers.length !== 1 || record.layers[0].count !== 80 || record.layers[0].darkCount !== 80) throw new Error(label + ': activation wrong: ' + JSON.stringify(record.layers))
+  // 1) activation applied exactly one layer with 80 tokens (each a { light, dark } pair)
+  if (record.layers.length !== 1 || record.layers[0].count !== 80) throw new Error(label + ': activation wrong: ' + JSON.stringify(record.layers))
 
-  // 2) settings row registered
+  // 2) settings row registered; activation must NOT write storage
   const reg = getReg()
   if (!reg) throw new Error(label + ': row factory not injected')
   reg.factory()
   if (!reg.opts || reg.opts.id !== 'aurora-theme') throw new Error(label + ': row not registered')
   const injected = reg.opts.inject()
   if (injected.getCurrent() !== 'aurora') throw new Error(label + ': initial theme wrong')
+  if (storageMap.has(STORAGE_KEY)) throw new Error(label + ': activation must not write storage')
 
   // 3) switch through all 8 themes: each replaces the layer (same source), all 80 tokens
   const themes = ['aurora', 'sakura', 'bamboo', 'violet', 'amber', 'abyss', 'graphite', 'midnight']
@@ -83,6 +104,18 @@ for (const [label, src, isBundle] of [
   if (last.count !== 80) throw new Error(label + ': last layer wrong')
   // switching must have disposed intermediate layers (dynamic facade also auto-hangs, fine)
   if (record.disposed.length < 6) throw new Error(label + ': expected dispose calls, got ' + record.disposed.length)
+
+  // 3b) persistence: last switch wrote the versioned key; a fresh activation
+  //     restores it; an unknown stored id falls back to the default
+  if (storageMap.get(STORAGE_KEY) !== 'midnight') throw new Error(label + ': saved theme wrong: ' + storageMap.get(STORAGE_KEY))
+  if (typeof cleanup === 'function') cleanup()
+  plugin.apply(ctx)
+  getReg().factory()
+  if (getReg().opts.inject().getCurrent() !== 'midnight') throw new Error(label + ': saved theme not restored')
+  storageMap.set(STORAGE_KEY, 'not-a-theme')
+  plugin.apply(ctx)
+  getReg().factory()
+  if (getReg().opts.inject().getCurrent() !== 'aurora') throw new Error(label + ': unknown saved id must fall back')
 
   // 4) render the row component (8 chips)
   reg.comp({ ...injected })
@@ -106,10 +139,11 @@ const seg = (src, name) => {
   if (!m) throw new Error('function not found: ' + name)
   return m[0].replace(/^[ \t]+/gm, '').trim()
 }
-// The generator + palette region (hexToRgb → THEMES assembly) must be byte-identical
-// (modulo indentation) between the two halves, which guarantees identical output.
+// The generator + palette region (buildTokens → THEMES assembly) must be
+// byte-identical (modulo indentation) between the two halves, which
+// guarantees identical output.
 const region = (src) => {
-  const start = src.indexOf('function hexToRgb')
+  const start = src.indexOf('function buildTokens')
   const end = src.indexOf('// 组装 8 套主题')
   if (start < 0 || end < 0) throw new Error('region anchors not found')
   return src

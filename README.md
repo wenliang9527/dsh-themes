@@ -17,9 +17,9 @@ DeepSeek Harness (DSH) Web GUI 的 **8 套主题** + **插件开发指南**。
 
 1. 让 AI 执行 `cordis_define`：`kind: "new"`、`idPrefix: "aurora"`、`code.client` ← `plugins/dsh-aurora/client.js` 全文。
 2. `cordis_run` 激活并批准授权 —— 页面立即变为极光配色。
-3. 设置 → 通用 →「🎨 主题」选择行：8 个色块点击切换。
+3. 设置 → 通用 →「🎨 主题」选择行：8 个色块点击切换；选择会记入浏览器本地存储（`dsh-aurora/settings/v1`），刷新/重启后自动恢复上次的主题。
 
-**持久化安装（重启不丢）**：
+**持久化安装（重启不丢，选择同样持久化）**：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File plugins\dsh-aurora\persist\install.ps1
@@ -41,7 +41,7 @@ powershell -ExecutionPolicy Bypass -File plugins\dsh-aurora\persist\install.ps1
 | ⬛ **石墨** graphite | 石墨黑 `#111827` / 银灰 `#d1d5db` | 极简专业 · 中性灰 |
 | 🌙 **午夜** midnight | 靛蓝 `#4f46e5` / 淡靛 `#818cf8` | 静谧深邃 · 蓝紫系 |
 
-每套主题由 12 个核心色板参数经生成器产出 **80 个 `--dsw-*` 语义 token**（浅色/深色各一套值，跟随系统偏好）；语义色（错误/成功/警告）8 套共用，保证语义不混淆。
+每套主题由 12 个核心色板参数经生成器产出 **80 个 `--dsw-*` 语义 token**（浅色/深色各一套值，跟随系统偏好）；派生色由**原生 CSS `color-mix()`** 在浏览器端计算（免 JS 混色工具链）；语义色（错误/成功/警告）8 套共用，保证语义不混淆。
 
 ## 📁 结构
 
