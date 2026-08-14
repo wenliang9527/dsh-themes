@@ -85,7 +85,9 @@ powershell -ExecutionPolicy Bypass -File D:\WORK_VSCODE\Vibe-coding\DSHK\Plugin\
 ```powershell
 npm i -g pnpm
 cd D:\WORK_VSCODE\Vibe-coding\deepseekH
-npx dsh plugin --profile web add file:D:\WORK_VSCODE\Vibe-coding\DSHK\Plugin\plugins\dsh-aurora\persist
+# 最新 DSH 不分发全局 dsh launcher —— 从源码 checkout 根运行：
+pnpm dsh plugin --profile web add file:D:\WORK_VSCODE\Vibe-coding\DSHK\Plugin\plugins\dsh-aurora\persist
+# （本工作区经 npm 安装 @deepseek-ai/dsh 时也等价于：npx dsh plugin --profile web add <同上>）
 ```
 
 `dsh plugin` 自动初始化 profile → pnpm 安装 → 检测到 `dsh.bundle` 声明，自动把包加入 `dsh.profile.bundles` 层栈。然后重启 `npm run dsh`。之后改了 `persist/client.js` 再 `dsh plugin --profile web update dsh-aurora` + 重启即可（`link:` 前缀 = 符号链接，迭代更快）。
