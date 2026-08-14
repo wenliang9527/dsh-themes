@@ -740,6 +740,32 @@ dsh plugin --profile web add file:D:/path/to/dsh-aurora   # link: 前缀 = 符�
 
 **对照小结（dsh-aurora 已移植项）**：① ✅ 选择持久化改 localStorage（key `dsh-aurora/settings/v1` 带版本号 + 校验回退，激活不写盘、切换才写，重激活恢复上次选择）；③ ✅ 派生色换 `color-mix()` 删掉 hex 工具链（`cm`/`cmAlpha` 两个 helper，verify8 增加"值必须是 hex 或 color-mix"校验防回归）；② ⏳ 未迁 `settings.section` 整页——8 预设用 `settings.general.item` 色块行点击即切，对"快速换肤"是更好的交互，整页留给"可自由调色"型插件；④/⑤ 未做——状态只有一个 `current` 字符串，`defineStore` 与双语 locale 对当前规模是过度设计，需要时再引。
 
+**⑨ 颜色配置深度拆解（dsh-theme 的"6 根色"模型，数值验证过）**
+
+名义上 12 个颜色字段（6 色 × 浅/深），**实际手调自由度只有 4 个根色**：`accent / background / foreground / surface`。另两个字段是派生值（对 9 套预设逐一计算验证，9/9 全部精确命中）：
+
+- `inlineCode` = `fg 6% 混 bg`（浅色）/ `fg 10% 混 bg`（深色）——和它 legacy 迁移公式（`mixHex(fg, 0.06/0.1, bg)`）完全一致，说明预设当初就是按这条公式生成的；
+- `sidebar` = `background`（9/9 全部相等），侧栏色直接复用背景，从不单独手调。
+
+**派生模板：全部派生 token 只有两类分子（`fg` 或 `accent`）按固定百分比叠底色**，百分比表（来自 `theme-tokens.ts` 逐条核对）：
+
+| 组 | 模板（`color-mix(in oklch, X p%, base)`） |
+|---|---|
+| 层级阶梯 | layer-2 = fg 5% over surface；layer-3 = fg 8%；module-platform = fg 5% over surface；overlay = surface |
+| 边框阶梯 | l1 14% / l2 22% / l3 28% / l4 36%（fg over bg） |
+| 文字阶梯 | secondary 62% / tertiary 50% / caption 40% / dimmed 28%（fg over bg） |
+| 交互反馈 | hover 6% / hover-solid 6%(over surface) / hover-accent 14% / active 10%（fg over bg） |
+| 侧栏派生 | nav-item-active-accent = accent 12% over sidebar；nav-item-active = fg 10%；nav-item-hover = fg 6% |
+| 气泡 | bubble = accent 10% over bg；bubble-highlight = accent 20% |
+| 品牌/按钮 | brand-primary = accent；button-info-fill = accent；button-info-hover = accent 86% over fg(浅) / accent 82% over bg(深) |
+| 静态例外 | `--dsw-static-deepseek-500` = accent；`--dsw-static-deepseek-200` = accent 36% over bg（TurnStatus 组件直吃静态 DeepSeek 色阶，注释里声明的集中例外） |
+
+**语义色纪律：不覆盖 `state-error / success / warn`**，只动 `state-business-*`（品牌色）——错误/成功/警告永远保持 DSH 默认，避免语义混淆；与 dsh-aurora 用 9 个 SEMANTIC 值共享的做法是两种相反哲学（我们换来的是全 UI 颜色统一，代价是语义色偏离平台默认）。
+
+**surface 规律**（9 套数值核对）：dark surface ≈ bg 每通道 +10~11（约 +4% 提亮），light surface ≈ 纸白系（#F6F8FA~#FFFFFF）——均为手调，无公式。
+
+**对我们的启示**：①"4 根色 + 派生公式"模型让自由调色 UI 极简（12 个 color input 即可）且换肤对比度自动保持；我们是 17 字段手调（base/l1/l2/l3/brand/brand2/text1-4/bubble/bubbleHl/sidebar/navA/navHl），主题更精致、但换肤要逐个配、且无法支撑"自由调色"型设置页——若未来加自由调色，可把 text1-4 换成"fg 百分比阶梯"公式降维；② inlineCode/sidebar 的派生公式可直接抄，省掉每套手调两个字段；③ 语义色"动不动"是个明确的产品决策，二选一并在 README 里写明。
+
 ---
 
 ## 9. 最佳实践与踩坑清单
