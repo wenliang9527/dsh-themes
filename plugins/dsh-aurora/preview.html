@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>dsh-aurora 主题集 · 8 套配色预览</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif; background: #111113; color: #eceef1; padding: 32px 20px 64px; }
+  h1 { text-align: center; font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+  .sub { text-align: center; color: #8e959e; font-size: 13px; margin-bottom: 24px; }
+  .picker { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-bottom: 28px; }
+  .picker button { display: flex; align-items: center; gap: 8px; border: 1px solid rgba(255,255,255,.14); background: #18181b; color: #eceef1; border-radius: 999px; padding: 6px 14px 6px 8px; cursor: pointer; font-size: 13px; font-family: inherit; }
+  .picker button .dot { width: 16px; height: 16px; border-radius: 50%; flex: none; }
+  .picker button.on { border-color: #eceef1; box-shadow: 0 0 0 2px rgba(255,255,255,.12); }
+  .wrap { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 24px; max-width: 1100px; margin: 0 auto; }
+  .panel { border-radius: 16px; overflow: hidden; box-shadow: 0 12px 40px rgba(0,0,0,.45); }
+  .panel.light { background: #fff; border: 1px solid rgba(0,0,0,.08); }
+  .panel.dark { background: #121212; border: 1px solid rgba(255,255,255,.08); }
+  .head { padding: 14px 18px; font-size: 15px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+  .panel.light .head { background: var(--sidebar, #f5f5f5); border-bottom: 1px solid rgba(0,0,0,.08); }
+  .panel.dark .head { background: var(--sidebar, #141416); border-bottom: 1px solid rgba(255,255,255,.08); }
+  .head .tag { font-size: 11px; font-weight: 400; opacity: .65; }
+  .body { padding: 16px 18px 20px; }
+  .sec { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .55; margin: 14px 0 8px; }
+  .sec:first-child { margin-top: 0; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .chip { display: flex; align-items: center; gap: 10px; font-size: 12px; padding: 8px 10px; border-radius: 8px; background: rgba(128,128,128,.06); }
+  .sw { width: 26px; height: 26px; border-radius: 7px; flex: none; border: 1px solid rgba(128,128,128,.25); }
+  .chip .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chip .val { opacity: .6; font-size: 11px; font-family: Consolas, monospace; }
+  .demo { margin-top: 16px; border-radius: 10px; padding: 14px; font-size: 13px; line-height: 1.7; background: var(--l1); border: 1px solid var(--border); }
+  .demo .btn { display: inline-block; padding: 5px 16px; border-radius: 8px; font-size: 13px; margin-right: 8px; }
+  .demo .btn.primary { background: var(--brand); color: var(--fg); }
+  .demo .btn.ghost { border: 1px solid var(--border); color: var(--t1); }
+  .demo .bubble { display: inline-block; padding: 6px 12px; border-radius: 12px 12px 12px 4px; background: var(--bubble); color: var(--t1); }
+  .demo .bubble.hl { border-radius: 12px 12px 4px 12px; background: var(--bubble-hl); margin-left: 8px; }
+  .demo code { padding: 2px 6px; border-radius: 5px; background: var(--code); font-size: 12px; }
+  .demo .sidebar { display: inline-block; width: 130px; border-radius: 8px; padding: 8px 10px; background: var(--sidebar); font-size: 12px; }
+  .demo .sidebar .item { padding: 4px 8px; border-radius: 6px; margin-bottom: 4px; }
+  .demo .sidebar .item.on { background: var(--nav-active); box-shadow: inset 2px 0 0 var(--brand); }
+  .panel.light .demo { --fg: #fff; }
+  .panel.dark .demo { --fg: #0b0b0b; }
+</style>
+</head>
+<body>
+  <h1>🎨 dsh-aurora 主题集 · 8 套配色预览</h1>
+  <p class="sub">每套主题含浅色 / 深色双形态 · 与插件内 THEME_DEFS 完全一致</p>
+  <div class="picker" id="picker"></div>
+  <div class="wrap" id="wrap"></div>
+
+<script>
+// 与 client.js 的 THEME_DEFS 一致(8 套 × 12 核心参数)
+const THEMES = {
+  aurora: { name: '极光', chip: '#0d9488',
+    light: { base:'#f9fbfa', l1:'#ffffff', l2:'#fcfdfc', l3:'#f7faf9', brand:'#0d9488', brand2:'#0f7670', t1:'#182725', t2:'#475956', bubble:'#e7f7f4', bubbleHl:'#d1f0eb', sidebar:'#f4f8f7', navA:'#e6f5f2' },
+    dark:  { base:'#0c1211', l1:'#121b19', l2:'#17211f', l3:'#1b2724', brand:'#2dd4bf', brand2:'#5eead4', t1:'#e8f7f3', t2:'#9db4af', bubble:'#172825', bubbleHl:'#112522', sidebar:'#0e1614', navA:'#16221f' } },
+  sakura: { name: '樱花', chip: '#db2777',
+    light: { base:'#fdf9fb', l1:'#ffffff', l2:'#fefcfd', l3:'#faf3f7', brand:'#db2777', brand2:'#be185d', t1:'#3f2431', t2:'#6d4f5e', bubble:'#fdeef5', bubbleHl:'#f9d9ea', sidebar:'#fdf6f9', navA:'#fbe7f1' },
+    dark:  { base:'#1a1016', l1:'#241821', l2:'#2d1e28', l3:'#352430', brand:'#f472b6', brand2:'#f9a8d4', t1:'#fbeef5', t2:'#d4b3c3', bubble:'#33202a', bubbleHl:'#2b1a23', sidebar:'#1d1218', navA:'#2b1b24' } },
+  bamboo: { name: '竹影', chip: '#4d7c0f',
+    light: { base:'#fafbf6', l1:'#ffffff', l2:'#fcfdf9', l3:'#f5f8ee', brand:'#4d7c0f', brand2:'#3f6212', t1:'#2b3624', t2:'#59664f', bubble:'#eff7e4', bubbleHl:'#e0f0cc', sidebar:'#f7f9f1', navA:'#eef5e2' },
+    dark:  { base:'#12160d', l1:'#1a2013', l2:'#212918', l3:'#28311e', brand:'#a3e635', brand2:'#bef264', t1:'#f0f7e6', t2:'#c0cdb2', bubble:'#232c18', bubbleHl:'#1d2513', sidebar:'#14190f', navA:'#202a15' } },
+  violet: { name: '紫罗兰', chip: '#7c3aed',
+    light: { base:'#faf9fd', l1:'#ffffff', l2:'#fcfbfe', l3:'#f4f1fa', brand:'#7c3aed', brand2:'#6d28d9', t1:'#2e2440', t2:'#5d5276', bubble:'#f2edfd', bubbleHl:'#e6dcfb', sidebar:'#f8f6fc', navA:'#efe8fb' },
+    dark:  { base:'#140f1e', l1:'#1d152b', l2:'#251a36', l3:'#2c1f40', brand:'#a78bfa', brand2:'#c4b5fd', t1:'#f0ebfa', t2:'#c9bfdd', bubble:'#2a1f3d', bubbleHl:'#241a35', sidebar:'#171020', navA:'#241a34' } },
+  amber: { name: '琥珀', chip: '#d97706',
+    light: { base:'#fdf9f4', l1:'#ffffff', l2:'#fefbf7', l3:'#f9f2e8', brand:'#d97706', brand2:'#b45309', t1:'#40342a', t2:'#6d5d4f', bubble:'#fdefd9', bubbleHl:'#fbe3b8', sidebar:'#fcf6ee', navA:'#faecd7' },
+    dark:  { base:'#171310', l1:'#201a15', l2:'#282117', l3:'#302818', brand:'#fbbf24', brand2:'#fcd34d', t1:'#faf3e8', t2:'#d6c3ab', bubble:'#33291a', bubbleHl:'#2b2315', sidebar:'#1a1511', navA:'#2b2216' } },
+  abyss: { name: '深海', chip: '#1d4ed8',
+    light: { base:'#f4f8fc', l1:'#ffffff', l2:'#f9fbfe', l3:'#edf3fa', brand:'#1d4ed8', brand2:'#1e40af', t1:'#1e2a3a', t2:'#4d5d73', bubble:'#e3eefb', bubbleHl:'#cfe0f7', sidebar:'#f0f6fb', navA:'#e2ecf9' },
+    dark:  { base:'#0b1220', l1:'#111a2c', l2:'#16213a', l3:'#1b2846', brand:'#60a5fa', brand2:'#93c5fd', t1:'#e6eefb', t2:'#b6c4da', bubble:'#182742', bubbleHl:'#132138', sidebar:'#0d1525', navA:'#172642' } },
+  graphite: { name: '石墨', chip: '#374151',
+    light: { base:'#fafafa', l1:'#ffffff', l2:'#fdfdfd', l3:'#f3f3f3', brand:'#111827', brand2:'#1f2937', t1:'#1f2937', t2:'#4b5563', bubble:'#f1f3f5', bubbleHl:'#e5e9ec', sidebar:'#f5f5f5', navA:'#ebedf0' },
+    dark:  { base:'#111113', l1:'#18181b', l2:'#1e1e22', l3:'#242429', brand:'#d1d5db', brand2:'#f3f4f6', t1:'#eceef1', t2:'#b6bcc4', bubble:'#232327', bubbleHl:'#1d1d21', sidebar:'#141416', navA:'#1f1f23' } },
+  midnight: { name: '午夜', chip: '#4f46e5',
+    light: { base:'#f7f8fd', l1:'#ffffff', l2:'#fafbfe', l3:'#eff1fb', brand:'#4f46e5', brand2:'#4338ca', t1:'#222442', t2:'#52557a', bubble:'#e8e9fb', bubbleHl:'#d6d8f8', sidebar:'#f1f2fa', navA:'#e3e4f8' },
+    dark:  { base:'#0d0e1a', l1:'#141527', l2:'#191b31', l3:'#1f213c', brand:'#818cf8', brand2:'#a5b4fc', t1:'#eaebf9', t2:'#b9bcdc', bubble:'#1f2140', bubbleHl:'#191b35', sidebar:'#101122', navA:'#1c1e39' } },
+}
+const SEM = { light: { err:'#dc2626', ok:'#16a34a', wa:'#f59e0b' }, dark: { err:'#f87171', ok:'#4ade80', wa:'#f59e0b' } }
+
+const GROUPS = ['base', 'l1', 'l2', 'l3', 'brand', 'brand2', 't1', 't2', 'bubble', 'bubbleHl', 'sidebar', 'navA']
+const LABELS = { base:'bg-base', l1:'bg-layer-1', l2:'bg-layer-2', l3:'bg-layer-3', brand:'brand-primary', brand2:'brand-hover', t1:'label-primary', t2:'label-secondary', bubble:'bubble', bubbleHl:'bubble-hl', sidebar:'sidebar-fill', navA:'nav-active' }
+
+function panel(kind, title, p) {
+  const border = kind === 'light' ? 'rgba(0,0,0,.12)' : 'rgba(255,255,255,.13)'
+  const chips = GROUPS.map(k => `
+    <div class="chip" title="${k}">
+      <span class="sw" style="background:${p[k]}"></span>
+      <span class="name">${LABELS[k]}</span>
+      <span class="val">${p[k]}</span>
+    </div>`).join('')
+  const sem = SEM[kind]
+  return `<div class="panel ${kind}" style="background:${p.base};color:${p.t1}">
+    <div class="head" style="--sidebar:${p.sidebar}"><span>${title}</span><span class="tag">${kind === 'light' ? '浅色' : '深色'}</span></div>
+    <div class="body">
+      <div class="grid">${chips}</div>
+      <div class="sec">状态色</div>
+      <div class="grid">
+        <div class="chip"><span class="sw" style="background:${sem.err}"></span><span class="name">error</span><span class="val">${sem.err}</span></div>
+        <div class="chip"><span class="sw" style="background:${sem.ok}"></span><span class="name">success</span><span class="val">${sem.ok}</span></div>
+        <div class="chip"><span class="sw" style="background:${sem.wa}"></span><span class="name">warn</span><span class="val">${sem.wa}</span></div>
+      </div>
+      <div class="sec">效果示意</div>
+      <div class="demo" style="--l1:${p.l1};--border:${border};--brand:${p.brand};--t1:${p.t1};--bubble:${p.bubble};--bubble-hl:${p.bubbleHl};--code:${p.l3};--sidebar:${p.sidebar};--nav-active:${p.navA}">
+        <span class="sidebar"><div class="item on">会话</div><div class="item">工具</div><div class="item">设置</div></span><br><br>
+        <span class="btn primary">主要按钮</span><span class="btn ghost">次要按钮</span><br><br>
+        <span class="bubble">助手气泡</span><span class="bubble hl">高亮气泡</span><br><br>
+        行内代码 <code>const aurora = true</code>
+      </div>
+    </div>
+  </div>`
+}
+
+let current = 'aurora'
+function render() {
+  const t = THEMES[current]
+  document.getElementById('picker').innerHTML = Object.entries(THEMES).map(([id, x]) =>
+    `<button class="${id === current ? 'on' : ''}" onclick="pick('${id}')"><span class="dot" style="background:${x.chip}"></span>${x.name}</button>`).join('')
+  document.getElementById('wrap').innerHTML =
+    panel('light', '☀️ 浅色', t.light) + panel('dark', '🌙 深色', t.dark)
+}
+window.pick = (id) => { current = id; render() }
+render()
+</script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+{
+  "name": "dsh-aurora",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Aurora theme for DeepSeek Harness Web (persistent edition): teal palette via theme.overrideTokens.",
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-theme"
+      ]
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

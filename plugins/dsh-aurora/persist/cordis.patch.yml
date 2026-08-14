@@ -1,0 +1,9 @@
+# dsh-aurora 持久化补丁层(bundle layer)
+# 本文件是 dsh.profile.bundles 层栈中的一个补丁层:把 dsh-aurora 的
+# loader 条目插入 profile 的 loader 树。
+# 语法见 @deepseek-ai/dsh-app-boot 的 applyEntryPatches:
+#   - insert: 顶层插入条目列表(无 id 即顶层插入)
+#   - { id, ...overrides }: 定向覆盖已有条目
+- insert:
+    - id: dsh-aurora
+      name: dsh-aurora
