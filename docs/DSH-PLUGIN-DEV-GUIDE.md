@@ -533,7 +533,7 @@ return {
 - 内置偏好（light/dark/system）存于 Host 设置 `ui-theme.preference`（默认落盘 `$DSH_HOME/settings.yaml`）；Appearance 行的选择经 Host settings API 写入，跨浏览器同步。
 - Host 在 index 响应里注入引导脚本：插件树激活前就把 `color-scheme` 和 `body[data-ds-dark-theme]` 设好，避免首帧闪烁。
 - 第三方主题 id **不跨内置 schema**：只是进程内扩展；卸载时绝不会覆盖最后持久化的内置偏好。
-- **第三方插件自己的偏好没有 Host 设置命名空间可用**（rc.6 仍如此）。社区标准做法是带版本号的 localStorage key + 逐字段校验回退（见 8.3 案例三）：`apply` 时读出、改动即写、坏数据回退默认——跨重启/跨刷新保留，但只对当前浏览器与 origin 生效。
+- **第三方插件自己的偏好没有 Host 设置命名空间可用**（rc.6 仍如此）——但注意浏览器线白名单与 Host 设置缝是两回事：**浏览器设置 RPC**（`settings.describe`/`mutate`）只服务硬编码白名单（`settings-not-exposed`）；**Host 半区的 `settings.register(ns, schema)` 缝对第三方开放**，配合 `webServer.register` 挂私有路由即可把偏好落盘 `$DSH_HOME/settings.yaml`（见 8.4 案例四，三种持久化路径对比）。社区两条路：① 带版本号 localStorage key + 逐字段校验回退（dsh-theme / dsh-aurora，最简单，浏览器级）；② Host 设置缝 + 私有 HTTP 路由（dsh-theme-palettes，Host 级、跨浏览器同步、revision 冲突控制，代价是 Host 半区 + schemastery 依赖）。
 
 ---
 
@@ -766,6 +766,50 @@ dsh plugin --profile web add file:D:/path/to/dsh-aurora   # link: 前缀 = 符�
 
 **对我们的启示**：①"4 根色 + 派生公式"模型让自由调色 UI 极简（12 个 color input 即可）且换肤对比度自动保持；我们是 17 字段手调（base/l1/l2/l3/brand/brand2/text1-4/bubble/bubbleHl/sidebar/navA/navHl），主题更精致、但换肤要逐个配、且无法支撑"自由调色"型设置页——若未来加自由调色，可把 text1-4 换成"fg 百分比阶梯"公式降维；② inlineCode/sidebar 的派生公式可直接抄，省掉每套手调两个字段；③ 语义色"动不动"是个明确的产品决策，二选一并在 README 里写明。
 
+### 8.4 案例四：dsh-theme-palettes —— 配色基础设施 + Host 设置缝持久化（第三种持久化路径）
+
+`dsh-theme-palettes`（RainbowDashy，2026-08 实测，已对本地 rc.6 逐项验证）定位是 **palette 基础设施**而非主题集：内置 VSCode Red / Solarized Dark / Solarized Light 三套**忠实移植** VSCode 主题的配色，并提供 `themePalettes` 客户端服务让第三方插件注册自己的 palette。核心价值两点：**配色风格三足鼎立的第三极** + **第三种持久化路径（Host 设置缝 + 私有 HTTP 路由，落盘 `$DSH_HOME/settings.yaml`）**。
+
+**① 配色风格：手写全量 token 表（与两家的"派生"哲学相反）**
+- 每套 87–89 个 token **全部手写**、明暗无关（palette 本身是单值集合，由"scheme → palette"映射层决定哪套生效——它不为每套写 `{light, dark}` 对，而是浅色映射选一套、深色映射选另一套，设置页两个下拉）。
+- token 覆盖度三家最高：连我们没见过的 `--dsw-alias-bg-mask-1/2/3`（蒙层）、`bg-mask-photo/drop`、`button-tool-bar-fill(-invisible)/hover`（工具栏按钮）、`specific-menu`（菜单）、`specific-selector`、`specific-login-input` 都逐个覆盖。结论：**`design-platform.css` 之外的 token 还有一整批没被常见插件摸到**。
+- 半透明直接写 `rgba()` 字面量（边框/交互），不用 color-mix；Solarized 用规范 base0/base1/base01/base02/base03 阶梯，VSCode Red 用暗红阶（`#390000` 底 / `#cc3333` 强调 / `#ff6666` 边框）；**语义色全量手写**（error/success/warn 每套单独定，与 dsh-theme"不动"相反、与我们"共享"又不同）。
+- 移植纪律（README 明说）：VSCode 的半透明强调色（`#2AA19899` 等）在 DSH 表面下会不稳 → 改成不透明/混色；`tokenColors`（语法高亮）**故意不带**——DSH 主题层只有 surface/chrome token，没地方映射。
+
+**② 应用机制：scheme-mapped 单层 overrideTokens**
+- 监听 `theme/change` → 微任务里 `resolve()`：读 `theme.getTheme().active.colorScheme` → 取映射 `{dark, light}` → 目标 id（`default` 或未注册 id 一律回退默认，fail-soft）→ 把扁平 token 表自动配对成 `{light: v, dark: v}` 后 `overrideTokens('theme-palettes', pairs)`（同一 source 重复调用 = 替换整层，切换无需先 dispose）。
+- 三个防坑细节（它实测踩过）：**重入守卫** `resolving`（overrideTokens 同步发 theme/change，自己监听器会再进 resolve，没有守卫会栈溢出 "Maximum call stack size exceeded"）；**微任务 deferral**（让当前 emit 的监听器先跑完，layout presenter 画的是 post-resolution 快照）；**echo guard** `lastApplied = {scheme, paletteId}`（跳过 no-op 重放）。
+
+**③ 第三种持久化：Host 设置缝 + 私有 HTTP 路由（对比 localStorage 的升级路径）**
+- 背景：浏览器设置线（`settings.describe`/`mutate` RPC）只服务硬编码命名空间白名单（`dsh-host-apiproxy` 的 `WEB_SETTINGS_NAMESPACES`），第三方命名空间被拒 `settings-not-exposed`——所以浏览器半区没法走标准设置 RPC。
+- 绕过：**Host 半区直接在设置缝上注册命名空间**（`ctx.inject(['settings'], ...)` → `settings.register('theme-palettes', z.object({dark: z.string().default('default'), light: ...}))`，schemastery 是唯一运行时依赖），再 **`ctx.inject(['webServer'], ...)` → `webServer.register({kind: 'exact', path: '/api/theme-palettes', handler})`** 挂一条同源私有路由：GET = `settings.describe()` 找自己命名空间返回 `{value, revision, writable}`；POST = `normalizeOps` 校验 + `seam.mutate(NS, ops, expectedRevision)`（冲突 `SETTINGS_CONFLICT` → 400 `settings-conflict`）。落盘位置和内置命名空间同一个 `settings.yaml`。
+- 浏览器半区：`fetch` 读写该路由；**乐观更新**（先改本地，写失败再读回权威值）；`expectedRevision` 冲突恢复；`remote.$on('settings/document-updated')` 让另一个浏览器/宿主侧的改动实时同步；`connection/reset` 重载。
+- 持久化三方案对比：**localStorage**（浏览器级，dsh-theme/dsh-aurora 用，最简单、跨重启不丢但只对本机浏览器）< **Host 设置缝 + 私有路由**（Host 级，落盘 settings.yaml、跨浏览器同步、带 revision 冲突控制，代价是要写 Host 半区 + webServer 路由 + schemastery 依赖）。rc.6 验证：`settings.register/describe/mutate`、`webServer.register({kind:'exact',...})` 签名全部存在。
+
+**④ 设置 UI：`settings.plugin.item` 卡片**（rc.6 由 `dsh-client-ui-settings-plugins` 的 configurable tab 在运行时声明）
+- 槽位链：`settings.section`（Plugins 设置页）→ `settings.plugins.tab`（标签页，"Plugin Configuration" 页声明它）→ `settings.plugin.item`（插件配置**卡片**，自带 bash/agent-loop/web-search 三张官方卡）。
+- 卡片 = 可折叠 `li.card`：标题 + 描述 + "not persisted" 状态 pill + 旋转箭头；字段区用 `--dsw-*` token 上色（这样 palette 覆盖层会连设置页一起换肤）；自注入 `<style data-plugin-css="…">`（`document.querySelector` 幂等守卫，工厂闭包副作用——client-modules 文档化行为）。
+- 注册只给 `{name, id, order}`，不需要 inject/store/locale（段内自绘）；目录预览用双色渐变 tile（base+accent 各半）而非单色方块。
+
+**⑤ 工程细节**
+- `dsh.client.immediately: true` = **阶段一预取**（client-modules 的 boot manifest 标记，module-face 启动时即加载脚本注册工厂，不等图遍历）。
+- `build.mjs` 手写打包：把 `src/client.js + palettes.js + settings.js` 内联进 `__ModuleLoader__.load` 格式（raw ESM 在 classic-script 上下文是 SyntaxError），host 半区内联进 `index.js`（保留 schemastery import），`cordis.patch.yml` 也由它生成；**零 install 脚本**（pnpm 10+ 默认禁 git 依赖的生命周期脚本，产物提交进仓库、无 prepare 钩子）。`test.mjs` 用 stub 跑契约测试（host-schema 保持零依赖以便测试）。
+- 服务提供：`ctx.effect(() => ctx.provide('themePalettes', {...}))` 把服务暴露给其他插件，第三方 `inject: ['themePalettes']` 即可 `registerPalette({id: 'pkg/ocean', label, tokens})`（重复 id 抛错、返回 disposer）——**插件间服务扩展**的完整范例。
+
+**⑥ 三家配色风格对比（学习吸收结论）**
+
+| 维度 | dsh-theme（oil-oil） | dsh-theme-palettes（RainbowDashy） | dsh-aurora（本工作区） |
+|---|---|---|---|
+| 哲学 | 4 根色 + color-mix 百分比公式派生 | 手写全量 token 表（87–89/套） | 17 字段生成器 → 80 token 批量派生 |
+| 语义色 | **不覆盖**（保持默认） | 每套**全量手写** | 9 值共享 |
+| 半透明 | `color-mix(in srgb, X p%, transparent)` | `rgba()` 字面量 | `color-mix(...)` |
+| token 覆盖面 | ~40 个（含静态例外） | 87–89（含 mask/tool-bar/menu） | 80 个 |
+| 明暗组织 | 每套自带 `{light,dark}` 对 | 单值集合 + scheme 映射层 | 每套自带 `{light,dark}` 对 |
+| 换肤成本 | 极低（4 色） | 高（逐 token 手调） | 中（12 参数/套） |
+| 适用 | 自由调色 / 极简主题 | 高保真移植现成主题 | 快速出多主题 |
+
+**⑦ 对我们的启示**：① 持久化升级路线：localStorage → **Host 设置缝 + 私有路由**（要跨浏览器同步/落盘 settings.yaml 时，照抄 §④ 模式即可，`settings.register` + `webServer.register` 已确认可用）；② 它的"scheme 映射层"思路（浅/深分别选一套 palette）可让单一主题同时挂不同 palette，但和我们的"每主题自带双态"是两种 UX，不必改；③ 语义色三种策略（不动/共享/全量手写）是明确取舍，我们选"共享"保持全 UI 统一，README 已写明；④ token 全表覆盖提醒我们：mask/tool-bar/menu 等 token 若未来要深度定制可查 `design-platform.css` 对照补全。
+
 ---
 
 ## 9. 最佳实践与踩坑清单
@@ -820,6 +864,7 @@ dsh plugin --profile web add file:D:/path/to/dsh-aurora   # link: 前缀 = 符�
 - dsh-visualize（bundle 类插件 + tsdown 构建 host/client）:<https://github.com/Nagi-ovo/dsh-visualize>
 - dsh-find-plugins（skill 分发 + 安装方式权威矩阵）:<https://github.com/Nagi-ovo/dsh-find-plugins>（`skills/find-plugins/references/install-methods.md`）
 - dsh-theme（主题类插件完整范式：`settings.section` 整页 + `defineStore` + localStorage 偏好持久化 + `color-mix` 派生色）:<https://github.com/oil-oil/dsh-theme>
+- dsh-theme-palettes（配色基础设施：手写全量 token 表 + Host 设置缝持久化 + `settings.plugin.item` 配置卡片）:<https://github.com/RainbowDashy/dsh-theme-palettes>
 - 社区 plugin-registry（设置 → 插件 安装源）:<https://github.com/dsh-external/plugin-registry>
 
 **本地源码（权威契约，按需精读）**
