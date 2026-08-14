@@ -675,8 +675,8 @@ dsh plugin --profile web add file:D:/path/to/dsh-aurora   # link: 前缀 = 符�
 
 社区两个参考项目的结论（2026-08 实测）：
 
-- **dsh-visualize**：`@dsh-external/dsh-visualize` —— **bundle 类**插件。`package.json` 声明 `dsh.bundle.patch: "./cordis.patch.yml"`（包自带 `insert:` 块）；安装 = `dsh plugin --profile web add github:Nagi-ovo/dsh-visualize`（GitHub 源支持锁定 commit：`github:owner/repo#commit`；本地开发用 `dsh plugin add .`）。`dsh plugin` 命令会交给 profile 的 pnpm，并把声明了 `dsh.bundle` 的包加入 `dsh.profile.bundles` 层栈。
-- **dsh-find-plugins**：`skills/find-plugins/references/install-methods.md` 给出了**安装方式权威矩阵**：
+- **dsh-visualize**：`@dsh-external/dsh-visualize` —— **bundle 类**插件。`package.json` 声明 `dsh.bundle.patch: "./cordis.patch.yml"`（包自带 `insert:` 块），且 `exports` 额外导出 `./cordis.patch.yml` 与 `./package.json`；安装 = `dsh plugin --profile web add github:Nagi-ovo/dsh-visualize`（GitHub 源支持锁定 commit：`github:owner/repo#commit`；本地开发用 `dsh plugin add .`）。`dsh plugin` 命令会交给 profile 的 pnpm，并把声明了 `dsh.bundle` 的包加入 `dsh.profile.bundles` 层栈。它的 client bundle id 用**完整 scoped 包名**（`@dsh-external/dsh-visualize`），构建产物由 tsdown 产出（`lib/client.js` 即 `__ModuleLoader__.load` 格式）。
+- **dsh-find-plugins**：`skills/find-plugins/references/install-methods.md` 给出了**安装方式权威矩阵**，并配套确定性发现脚本 `scripts/search-topic.mjs`：以 GitHub `dsh-plugin` topic 为插件身份标识搜索全 GitHub（`topic:dsh-plugin is:public archived:false`，sort=updated），token 复用链 `GITHUB_TOKEN → GH_TOKEN → gh auth token → 匿名`，过滤 archived/disabled/fork 后输出候选 JSON；安装完成后验证挂载（长驻 surface 热载 / 一次性运行下次启动生效，排查 `hmr/config-update-failed`、Git spec owner 是否转移、profile 的 pnpm install 是否成功）。最新 DSH 不分发全局 `dsh` launcher，命令从源码 checkout 根目录经 `pnpm dsh` 运行。
 
 | 类别 | 判定 | 安装 |
 |---|---|---|
